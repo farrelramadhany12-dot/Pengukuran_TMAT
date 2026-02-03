@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMAT Smart Monitor</title>
+
+    <!-- CDNs -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK Compat (v9 as v8 compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Toggle Button Mobile -->
+    <!-- Mobile Navbar (New) -->
+    <div class="mobile-navbar">
+        <button class="menu-toggle" onclick="toggleSidebar()">
+            <i class="fa fa-bars"></i>
+        </button>
+        <div class="navbar-brand">
+            <i class="fa-solid fa-water"></i> TMAT Monitor
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="brand">
+            <i class="fa-solid fa-water"></i> TMAT Monitor
+        </div>
+        <a href="#" class="nav-item active" id="menu-dashboard" onclick="showView('dashboard')"><i
+                class="fa-solid fa-chart-line"></i> Dashboard</a>
+        <a href="#" class="nav-item" id="menu-settings" onclick="showView('settings')"><i class="fa-solid fa-gear"></i>
+            Settings</a>
+        <a href="#" class="nav-item" id="nav-login" onclick="openLoginModal()"><i
+                class="fa-solid fa-right-to-bracket"></i> Login</a>
+        <a href="#" class="nav-item" id="nav-logout" onclick="doLogout()" style="display:none;"><i
+                class="fa-solid fa-right-from-bracket"></i> Logout</a>
+        <a href="#" class="nav-item" id="nav-logout" onclick="doLogout()" style="display:none;"><i
+                class="fa-solid fa-right-from-bracket"></i> Logout</a>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="content">
+        <!-- HEADER -->
+        <div class="header">
+
+            <h2>Dashboard Pemantauan</h2>
+            <p>Sistem Deteksi Tinggi Muka Air Tanah (Realtime)</p>
+        </div>
+
+        <!-- VIEW: DASHBOARD -->
+        <div id="view-dashboard">
+            <!-- Status Card -->
+            <div class="card" id="status-card">
+                <h3>Status Terakhir</h3>
+                <h1 id="val-tmat" style="font-size: 3em; margin: 10px 0;">-- cm</h1>
+                <span id="badge-status-main" class="badge badge-aman">--</span>
+                <i class="fa-solid fa-satellite-dish"
+                    style="position:absolute; right:30px; top:40%; font-size:3em; color:var(--primary); opacity:0.5;"></i>
+            </div>
+
+            <!-- Input Data Button (Only visible if logged in) -->
+            <button id="btn-show-input" class="btn-primary" onclick="openInputModal()"
+                style="display:none; margin-bottom:20px; width:auto;">
+                <i class="fa-solid fa-pen-to-square"></i> Input Data Manual
+            </button>
+
+            <!-- History Table -->
+            <div class="table-container">
+                <h3 style="margin-bottom:15px; color:var(--text-dark);">Riwayat Pengukuran</h3>
+
+                <!-- Filter & Tools Area -->
+                <div class="tools-area">
+                    <div class="filter-group">
+                        <label>Dari Tanggal</label>
+                        <input type="date" id="start-date" class="form-control">
+                    </div>
+                    <div class="filter-group">
+                        <label>Sampai Tanggal</label>
+                        <input type="date" id="end-date" class="form-control">
+                    </div>
+
+                    <!-- Filter Button Moved Here -->
+                    <button class="btn-primary" onclick="filterData()" style="width: auto; margin-bottom: 2px;">
+                        <i class="fa-solid fa-filter"></i> Filter
+                    </button>
+
+                    <div class="action-buttons">
+                        <button class="btn-success" onclick="exportExcel()">
+                            <i class="fa-solid fa-file-excel"></i> Export
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bulk Delete Button (Hidden) -->
+                <div id="admin-tools" style="display:none; margin-bottom: 15px;">
+                    <button class="btn-danger" onclick="deleteSelected()" style="padding: 8px 15px;">
+                        <i class="fa-solid fa-trash"></i> Hapus Terpilih
+                    </button>
+                </div>
+
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th id="th-check" class="check-col" style="display:none; white-space:nowrap;">
+                                    <div style="display:flex; align-items:center; gap:5px;">
+                                        <input type="checkbox" id="check-all" onclick="toggleSelectAll()">
+                                        <small>Select All</small>
+                                    </div>
+                                </th>
+                                <th>Waktu</th>
+                                <th>Ketinggian</th>
+                                <th>Perubahan</th>
+                                <th>Status</th>
+                                <th id="th-action" class="action-col" style="display:none;">Hapus</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: SETTINGS -->
+        <div id="view-settings" class="card" style="display:none;">
+            <h2 style="margin-bottom:20px; color:var(--text-dark);">Pengaturan Sistem</h2>
+
+            <h4 style="margin-bottom:10px; border-bottom:1px solid #eee; padding-bottom:5px;">Kalibrasi Sensor</h4>
+            <div class="form-group">
+                <label>Offset (Tinggi Pemasangan) - cm</label>
+                <input type="number" step="0.1" id="cfg-offset" class="form-control" style="max-width:200px;"
+                    placeholder="0.0">
+            </div>
+            <div class="form-group">
+                <label>Batas Maksimal Pembacaan (cm)</label>
+                <input type="number" step="1" id="cfg-max-sensor" class="form-control" style="max-width:200px;"
+                    placeholder="Contoh: 400">
+                <small>Nilai sensor di atas angka ini akan diabaikan (dianggap error).</small>
+            </div>
+
+            <h4 style="margin:20px 0 10px; border-bottom:1px solid #eee; padding-bottom:5px;">Batas Status (Thresholds)
+            </h4>
+            <div class="form-group">
+                <label>Batas Banjir (< cm)</label>
+                        <input type="number" step="0.1" id="cfg-banjir" class="form-control" style="max-width:200px;"
+                            placeholder="< 0">
+                        <small>Ketinggian air di bawah angka ini dianggap BANJIR.</small>
+            </div>
+            <div class="form-group">
+                <label>Batas Aman (Range cm)</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="number" step="0.1" id="cfg-aman-min" class="form-control" style="max-width:150px;"
+                        placeholder="Min (50)">
+                    <input type="number" step="0.1" id="cfg-aman-max" class="form-control" style="max-width:150px;"
+                        placeholder="Max (200)">
+                </div>
+                <small>Ketinggian air di antara Min dan Max dianggap AMAN.</small>
+            </div>
+            <div class="form-group">
+                <label>Batas Kering (> cm)</label>
+                <input type="number" step="0.1" id="cfg-kering" class="form-control" style="max-width:200px;"
+                    placeholder="> 200">
+                <small>Ketinggian air di atas angka ini dianggap KERING.</small>
+            </div>
+
+            <div style="margin-top:20px;">
+                <button class="btn-primary" onclick="saveSettings()">Simpan Pengaturan</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Login Modal -->
+    <div id="modal-login" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeLoginModal()">&times;</span>
+            <h2 style="margin-bottom:20px; color:var(--text-dark);">Login Petugas</h2>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="login-user" placeholder="Username" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="login-pass" placeholder="Password" class="form-control">
+            </div>
+            <button class="btn-primary" onclick="doLogin()">Masuk</button>
+        </div>
+    </div>
+
+    <!-- Input Data Modal (Reinstated) -->
+    <div id="modal-input" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeInputModal()">&times;</span>
+            <h2 style="margin-bottom:20px; color:var(--text-dark);">Input Data Manual</h2>
+            <div class="form-group">
+                <label>Tanggal & Waktu (Opsional)</label>
+                <input type="datetime-local" id="input-datetime" class="form-control">
+                <small style="color:#666; font-size: 0.8em;">Biarkan kosong untuk waktu sekarang (Realtime).</small>
+            </div>
+            <div class="form-group">
+                <label>Tinggi Air (TMAT) - cm</label>
+                <input type="number" step="0.1" id="input-tmat" class="form-control">
+            </div>
+            <button class="btn-primary" onclick="submitManualData()">Simpan Data</button>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script src="script.js"></script>
+</body>
+
+</html>
